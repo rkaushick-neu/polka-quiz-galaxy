@@ -1,8 +1,10 @@
 
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
 import { Quiz, UserAnswer, UserResult, Question } from "../types";
 import { quizData } from "../data/quizData";
-import { toast } from "@/components/ui/sonner";
+import { useToast } from "@/components/ui/use-toast";
+import { useSocket } from "./SocketContext";
+import { calculateScore } from "@/lib/utils";
 
 interface QuizContextType {
   quiz: Quiz;
@@ -26,18 +28,22 @@ export const QuizProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [quiz] = useState<Quiz>(quizData);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<UserAnswer[]>([]);
-  const [results, setResults] = useState<UserResult[]>([
-    { walletAddress: "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", score: 9, displayName: "Alice" },
-    { walletAddress: "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty", score: 8, displayName: "Bob" },
-    { walletAddress: "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y", score: 7, displayName: "Charlie" },
-    { walletAddress: "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy", score: 6, displayName: "Dave" },
-  ]);
+  const [results, setResults] = useState<UserResult[]>([]);
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [userScore, setUserScore] = useState(0);
+  const { toast } = useToast();
+  const { results: networkResults } = useSocket();
 
   const currentQuestion: Question = quiz.questions[currentQuestionIndex];
   const hasAnsweredCurrent = userAnswers.some(answer => answer.questionId === currentQuestion.id);
   const selectedAnswerIndex = userAnswers.find(answer => answer.questionId === currentQuestion.id)?.selectedOption ?? null;
+
+  // Update results from network when available
+  useEffect(() => {
+    if (networkResults.length > 0) {
+      setResults(networkResults);
+    }
+  }, [networkResults]);
 
   const handleAnswer = (questionId: number, optionIndex: number) => {
     const updatedAnswers = [
@@ -59,27 +65,15 @@ export const QuizProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const calculateScore = (): number => {
-    return userAnswers.reduce((score, answer) => {
-      const question = quiz.questions.find((q) => q.id === answer.questionId);
-      if (question && question.correctAnswer === answer.selectedOption) {
-        return score + 1;
-      }
-      return score;
-    }, 0);
-  };
-
   const submitQuiz = (walletAddress: string) => {
-    const score = calculateScore();
+    const score = calculateScore(quiz.questions, userAnswers);
     setUserScore(score);
-    
-    // Insert user into results, maintaining sort by score
-    const newResult: UserResult = { walletAddress, score };
-    const newResults = [...results, newResult].sort((a, b) => b.score - a.score);
-    
-    setResults(newResults);
     setQuizSubmitted(true);
-    toast.success("Quiz submitted successfully!");
+    
+    toast({
+      title: "Quiz Submitted",
+      description: "Your answers have been submitted successfully!",
+    });
   };
 
   const resetQuiz = () => {
@@ -87,6 +81,37 @@ export const QuizProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUserAnswers([]);
     setQuizSubmitted(false);
   };
+
+  return (
+    <QuizContext.Provider
+      value={{
+        quiz,
+        currentQuestionIndex,
+        userAnswers,
+        results,
+        userScore,
+        quizSubmitted,
+        handleAnswer,
+        nextQuestion,
+        prevQuestion,
+        submitQuiz,
+        resetQuiz,
+        hasAnsweredCurrent,
+        selectedAnswerIndex,
+      }}
+    >
+      {children}
+    </QuizContext.Provider>
+  );
+};
+
+export const useQuiz = () => {
+  const context = useContext(QuizContext);
+  if (context === undefined) {
+    throw new Error("useQuiz must be used within a QuizProvider");
+  }
+  return context;
+};
 
   return (
     <QuizContext.Provider
