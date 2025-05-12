@@ -1,4 +1,3 @@
-
 export interface Question {
   id: number;
   text: string;
@@ -19,7 +18,7 @@ export interface UserAnswer {
 }
 
 export interface UserResult {
-  walletAddress: string;
+  walletAddress?: string; // Make this optional
   score: number;
   displayName?: string;
   name?: string; // For network participants
@@ -41,8 +40,8 @@ export interface ServerInfo {
 export interface Participant {
   id: string;
   name: string;
-  walletAddress: string;
-  status: 'waiting' | 'in-progress' | 'completed';
+  walletAddress?: string; // Make this optional
+  status: "waiting" | "in-progress" | "completed";
 }
 
 export interface QuizState {
@@ -52,7 +51,7 @@ export interface QuizState {
 }
 
 export interface QuizCompletionData {
-  walletAddress: string;
+  walletAddress?: string; // Make this optional
   answers: UserAnswer[];
   score: number;
   displayName?: string;

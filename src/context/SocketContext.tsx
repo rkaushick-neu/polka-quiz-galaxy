@@ -1,8 +1,19 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { io, Socket } from 'socket.io-client';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+} from "react";
+import { io, Socket } from "socket.io-client";
 import { useToast } from "@/components/ui/use-toast";
-import { Participant, QuizState, ServerInfo, UserResult } from '@/types';
-import { useWallet } from './WalletContext';
+import {
+  Participant,
+  QuizState,
+  ServerInfo,
+  UserResult,
+  UserAnswer,
+} from "@/types";
 
 interface SocketContextType {
   socket: Socket | null;
@@ -12,8 +23,11 @@ interface SocketContextType {
   quizState: QuizState;
   registerParticipant: (name: string) => void;
   startQuiz: () => void;
-  completeQuiz: (score: number, answers: any[]) => void;
+  completeQuiz: (score: number, answers: UserAnswer[]) => void;
+  updateQuestionProgress: (questionIndex: number, currentScore: number) => void;
   results: UserResult[];
+  showLiveLeaderboard: boolean;
+  setShowLiveLeaderboard: (show: boolean) => void;
 }
 
 const defaultQuizState: QuizState = {
@@ -31,42 +45,49 @@ const SocketContext = createContext<SocketContextType>({
   registerParticipant: () => {},
   startQuiz: () => {},
   completeQuiz: () => {},
+  updateQuestionProgress: () => {},
   results: [],
+  showLiveLeaderboard: false,
+  setShowLiveLeaderboard: () => {},
 });
 
 export const useSocket = () => useContext(SocketContext);
 
-export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [quizState, setQuizState] = useState<QuizState>(defaultQuizState);
   const [results, setResults] = useState<UserResult[]>([]);
+  const [showLiveLeaderboard, setShowLiveLeaderboard] = useState(false);
   const { toast } = useToast();
-  const { address } = useWallet();
-
   // Initialize socket connection
   useEffect(() => {
-    // We'll use localhost for development, but in production this would dynamically
-    // use the server's IP from the network
-    const socketInstance = io('http://localhost:3001');
-    
-    socketInstance.on('connect', () => {
+    // Get the current hostname - works on both localhost and network IP
+    const hostname = window.location.hostname;
+    const socketUrl = `http://${hostname}:3001`;
+
+    console.log("Connecting to socket server at:", socketUrl);
+    const socketInstance = io(socketUrl);
+
+    socketInstance.on("connect", () => {
       setIsConnected(true);
       toast({
         title: "Connected to server",
         description: "You're connected to the quiz server",
       });
-      
+
       // Fetch server info
-      fetch('http://localhost:3001/server-info')
-        .then(res => res.json())
+      fetch(`${socketUrl}/server-info`)
+        .then((res) => res.json())
         .then(setServerInfo)
-        .catch(err => console.error('Failed to fetch server info:', err));
+        .catch((err) => console.error("Failed to fetch server info:", err));
     });
-    
-    socketInstance.on('disconnect', () => {
+
+    socketInstance.on("disconnect", () => {
       setIsConnected(false);
       toast({
         title: "Disconnected from server",
@@ -74,77 +95,103 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         variant: "destructive",
       });
     });
-    
-    socketInstance.on('participants-updated', (updatedParticipants: Participant[]) => {
-      setParticipants(updatedParticipants);
-    });
-    
-    socketInstance.on('quiz-state-updated', (updatedState: QuizState) => {
+
+    socketInstance.on(
+      "participants-updated",
+      (updatedParticipants: Participant[]) => {
+        setParticipants(updatedParticipants);
+      }
+    );
+
+    socketInstance.on("quiz-state-updated", (updatedState: QuizState) => {
       setQuizState(updatedState);
     });
-    
-    socketInstance.on('quiz-started', () => {
+
+    socketInstance.on("quiz-started", () => {
       toast({
         title: "Quiz Started",
         description: "The quiz has started!",
       });
     });
-    
-    socketInstance.on('all-completed', (quizResults: UserResult[]) => {
+    socketInstance.on("all-completed", (quizResults: UserResult[]) => {
       setResults(quizResults);
       toast({
         title: "Quiz Completed",
         description: "All participants have completed the quiz!",
       });
     });
-    
+
+    socketInstance.on(
+      "live-leaderboard-update",
+      (liveResults: UserResult[]) => {
+        setResults(liveResults);
+      }
+    );
+
     setSocket(socketInstance);
-    
+
     return () => {
       socketInstance.disconnect();
     };
   }, [toast]);
-  
-  // Register participant with name and wallet address
-  const registerParticipant = useCallback((name: string) => {
-    if (socket && address) {
-      socket.emit('register', { name, walletAddress: address });
-      toast({
-        title: "Registered",
-        description: `You're registered as ${name}`,
-      });
-    } else {
-      toast({
-        title: "Registration Failed",
-        description: "Wallet not connected or server not available",
-        variant: "destructive",
-      });
-    }
-  }, [socket, address, toast]);
-  
+
+  // Register participant with name (no wallet)
+  const registerParticipant = useCallback(
+    (name: string) => {
+      if (socket) {
+        // Generate a random ID to use instead of wallet address
+        const randomId = Math.random().toString(36).substring(2, 15);
+        socket.emit("register", { name, walletAddress: randomId });
+        toast({
+          title: "Registered",
+          description: `You're registered as ${name}`,
+        });
+      } else {
+        toast({
+          title: "Registration Failed",
+          description: "Server not available",
+          variant: "destructive",
+        });
+      }
+    },
+    [socket, toast]
+  );
+
   // Start the quiz
   const startQuiz = useCallback(() => {
     if (socket) {
-      socket.emit('start-quiz');
+      socket.emit("start-quiz");
     }
-  }, [socket]);
-  
-  // Complete the quiz
-  const completeQuiz = useCallback((score: number, answers: any[]) => {
-    if (socket && address) {
-      socket.emit('quiz-completed', {
-        walletAddress: address,
-        score,
-        answers,
-      });
-      
-      toast({
-        title: "Quiz Submitted",
-        description: "Your answers have been submitted",
-      });
-    }
-  }, [socket, address, toast]);
-  
+  }, [socket]); // Complete the quiz
+  const completeQuiz = useCallback(
+    (score: number, answers: UserAnswer[]) => {
+      if (socket) {
+        socket.emit("quiz-completed", {
+          score,
+          answers,
+        });
+
+        toast({
+          title: "Quiz Submitted",
+          description: "Your answers have been submitted",
+        });
+      }
+    },
+    [socket, toast]
+  );
+
+  // Update question progress
+  const updateQuestionProgress = useCallback(
+    (questionIndex: number, currentScore: number) => {
+      if (socket) {
+        socket.emit("question-progress", {
+          questionIndex,
+          score: currentScore,
+        });
+      }
+    },
+    [socket]
+  );
   const contextValue: SocketContextType = {
     socket,
     isConnected,
@@ -154,9 +201,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     registerParticipant,
     startQuiz,
     completeQuiz,
+    updateQuestionProgress,
     results,
+    showLiveLeaderboard,
+    setShowLiveLeaderboard,
   };
-  
+
   return (
     <SocketContext.Provider value={contextValue}>
       {children}

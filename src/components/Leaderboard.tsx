@@ -1,4 +1,3 @@
-
 import React, { useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,8 +12,12 @@ const Leaderboard: React.FC = () => {
   const { wallet } = useWallet();
   const { results } = useSocket();
 
-  const topScorers = [...results].sort((a, b) => b.score - a.score).slice(0, 10);
-  const userRank = topScorers.findIndex((result) => result.walletAddress === wallet.address) + 1;
+  const topScorers = [...results]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10);
+  const userRank =
+    topScorers.findIndex((result) => result.walletAddress === wallet.address) +
+    1;
   const isWinner = userRank <= 3 && userRank > 0;
 
   const handleClaim = () => {
@@ -28,7 +31,7 @@ const Leaderboard: React.FC = () => {
     // Reset quiz state
     resetQuiz();
     // This will take users back to the welcome page
-    window.location.reload(); 
+    window.location.reload();
   };
 
   const getBadgeEmoji = (rank: number) => {
@@ -40,7 +43,9 @@ const Leaderboard: React.FC = () => {
 
   const truncateAddress = (address: string) => {
     if (!address) return "";
-    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+    return `${address.substring(0, 6)}...${address.substring(
+      address.length - 4
+    )}`;
   };
 
   return (
@@ -75,16 +80,19 @@ const Leaderboard: React.FC = () => {
                   </div>
                   <div>
                     <div className="font-medium">You</div>
-                    <div className="text-sm text-gray-500">{truncateAddress(wallet.address || "")}</div>
+                    <div className="text-sm text-gray-500">
+                      {truncateAddress(wallet.address || "")}
+                    </div>
                   </div>
                 </div>
                 <div className="text-xl font-bold">
-                  {userScore} <span className="text-base font-normal">points</span>
+                  {userScore}{" "}
+                  <span className="text-base font-normal">points</span>
                 </div>
               </div>
               {isWinner && (
-                <Button 
-                  onClick={handleClaim} 
+                <Button
+                  onClick={handleClaim}
                   className="w-full mt-4 btn-primary"
                 >
                   Claim WND Reward
@@ -112,23 +120,38 @@ const Leaderboard: React.FC = () => {
                     <div className="flex items-center gap-3">
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center font-bold 
-                        ${index < 3 ? "bg-polkadot-pink text-white" : "bg-gray-100 text-gray-500"}`}
+                        ${
+                          index < 3
+                            ? "bg-polkadot-pink text-white"
+                            : "bg-gray-100 text-gray-500"
+                        }`}
                       >
                         {index + 1}
                       </div>
                       <div>
                         <div className="flex items-center font-medium">
                           {result.name || truncateAddress(result.walletAddress)}{" "}
-                          {index < 3 && <span className="ml-1">{getBadgeEmoji(index + 1)}</span>}
-                          {isUser && <span className="ml-2 text-xs bg-polkadot-pink text-white px-2 py-0.5 rounded-full">You</span>}
+                          {index < 3 && (
+                            <span className="ml-1">
+                              {getBadgeEmoji(index + 1)}
+                            </span>
+                          )}
+                          {isUser && (
+                            <span className="ml-2 text-xs bg-polkadot-pink text-white px-2 py-0.5 rounded-full">
+                              You
+                            </span>
+                          )}
                         </div>
                         {result.name && (
-                          <div className="text-sm text-gray-500">{truncateAddress(result.walletAddress)}</div>
+                          <div className="text-sm text-gray-500">
+                            {truncateAddress(result.walletAddress)}
+                          </div>
                         )}
                       </div>
                     </div>
                     <div className="text-lg font-bold">
-                      {result.score} <span className="text-sm font-normal">points</span>
+                      {result.score}{" "}
+                      <span className="text-sm font-normal">points</span>
                     </div>
                   </div>
                 );
@@ -140,31 +163,6 @@ const Leaderboard: React.FC = () => {
         <div className="mt-6 text-center">
           <Button onClick={handleReset} variant="outline" className="mx-auto">
             Start New Quiz
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-                          {isUser && <span className="ml-2 text-xs bg-polkadot-pink text-white px-2 py-0.5 rounded-full">You</span>}
-                        </div>
-                        {result.displayName && (
-                          <div className="text-sm text-gray-500">{truncateAddress(result.walletAddress)}</div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-lg font-bold">
-                      {result.score} <span className="text-sm font-normal">points</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="mt-6 text-center">
-          <Button onClick={resetQuiz} variant="outline" className="mx-auto">
-            Try Again
           </Button>
         </div>
       </div>

@@ -1,5 +1,10 @@
-
-import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  ReactNode,
+  useEffect,
+} from "react";
 import { Quiz, UserAnswer, UserResult, Question } from "../types";
 import { quizData } from "../data/quizData";
 import { useToast } from "@/components/ui/use-toast";
@@ -24,7 +29,9 @@ interface QuizContextType {
 
 const QuizContext = createContext<QuizContextType | undefined>(undefined);
 
-export const QuizProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const QuizProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   const [quiz] = useState<Quiz>(quizData);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<UserAnswer[]>([]);
@@ -32,11 +39,15 @@ export const QuizProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [userScore, setUserScore] = useState(0);
   const { toast } = useToast();
-  const { results: networkResults } = useSocket();
+  const { results: networkResults, updateQuestionProgress } = useSocket();
 
   const currentQuestion: Question = quiz.questions[currentQuestionIndex];
-  const hasAnsweredCurrent = userAnswers.some(answer => answer.questionId === currentQuestion.id);
-  const selectedAnswerIndex = userAnswers.find(answer => answer.questionId === currentQuestion.id)?.selectedOption ?? null;
+  const hasAnsweredCurrent = userAnswers.some(
+    (answer) => answer.questionId === currentQuestion.id
+  );
+  const selectedAnswerIndex =
+    userAnswers.find((answer) => answer.questionId === currentQuestion.id)
+      ?.selectedOption ?? null;
 
   // Update results from network when available
   useEffect(() => {
@@ -44,13 +55,19 @@ export const QuizProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setResults(networkResults);
     }
   }, [networkResults]);
-
   const handleAnswer = (questionId: number, optionIndex: number) => {
     const updatedAnswers = [
       ...userAnswers.filter((answer) => answer.questionId !== questionId),
       { questionId, selectedOption: optionIndex },
     ];
     setUserAnswers(updatedAnswers);
+
+    // Calculate current score
+    const currentScore = calculateScore(quiz.questions, updatedAnswers);
+    setUserScore(currentScore);
+
+    // Update the network with current progress
+    updateQuestionProgress(currentQuestionIndex, currentScore);
   };
 
   const nextQuestion = () => {
@@ -69,7 +86,7 @@ export const QuizProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const score = calculateScore(quiz.questions, userAnswers);
     setUserScore(score);
     setQuizSubmitted(true);
-    
+
     toast({
       title: "Quiz Submitted",
       description: "Your answers have been submitted successfully!",
@@ -81,37 +98,6 @@ export const QuizProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUserAnswers([]);
     setQuizSubmitted(false);
   };
-
-  return (
-    <QuizContext.Provider
-      value={{
-        quiz,
-        currentQuestionIndex,
-        userAnswers,
-        results,
-        userScore,
-        quizSubmitted,
-        handleAnswer,
-        nextQuestion,
-        prevQuestion,
-        submitQuiz,
-        resetQuiz,
-        hasAnsweredCurrent,
-        selectedAnswerIndex,
-      }}
-    >
-      {children}
-    </QuizContext.Provider>
-  );
-};
-
-export const useQuiz = () => {
-  const context = useContext(QuizContext);
-  if (context === undefined) {
-    throw new Error("useQuiz must be used within a QuizProvider");
-  }
-  return context;
-};
 
   return (
     <QuizContext.Provider

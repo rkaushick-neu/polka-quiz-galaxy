@@ -1,9 +1,9 @@
-import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
-import { Question, UserAnswer } from "@/types"
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+import { Question, UserAnswer } from "@/types";
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+  return twMerge(clsx(inputs));
 }
 
 /**
@@ -12,17 +12,20 @@ export function cn(...inputs: ClassValue[]) {
  * @param userAnswers The user's answers to the questions
  * @returns The user's score (number of correct answers)
  */
-export function calculateScore(questions: Question[], userAnswers: UserAnswer[]): number {
+export function calculateScore(
+  questions: Question[],
+  userAnswers: UserAnswer[]
+): number {
   if (!questions.length || !userAnswers.length) return 0;
-  
+
   let score = 0;
-  
-  userAnswers.forEach(userAnswer => {
-    const question = questions.find(q => q.id === userAnswer.questionId);
+
+  userAnswers.forEach((userAnswer) => {
+    const question = questions.find((q) => q.id === userAnswer.questionId);
     if (question && question.correctAnswer === userAnswer.selectedOption) {
       score++;
     }
   });
-  
+
   return score;
 }

@@ -1,11 +1,10 @@
-import express from "express";
-import { createServer } from "http";
-import { Server } from "socket.io";
-import cors from "cors";
-import path from "path";
-import os from "os";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
+// Common.js version of the server
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const cors = require("cors");
+const os = require("os");
+const { Participant, QuizState, QuizResult } = require("./types.cjs");
 
 // Find local IP address
 const getLocalIpAddress = () => {
@@ -24,7 +23,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const server = createServer(app);
+const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -46,29 +45,33 @@ let quizState = {
 // Socket.io connection handler
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
-
   // Handle participant registration
   socket.on("register", ({ name, walletAddress }) => {
+    // If no wallet address is provided, generate a random one
+    const participantId =
+      walletAddress || `user_${Math.random().toString(36).substring(2, 15)}`;
+
     participants.set(socket.id, {
       id: socket.id,
       name,
-      walletAddress,
+      walletAddress: participantId,
       status: "waiting",
+      currentQuestion: 0,
     });
     quizState.totalParticipants = participants.size;
 
-    console.log(`Participant registered: ${name} (${walletAddress})`);
+    console.log(`Participant registered: ${name} (${participantId})`);
 
     // Broadcast updated participants list to everyone
     io.emit("participants-updated", Array.from(participants.values()));
     io.emit("quiz-state-updated", quizState);
   });
-
   // Handle quiz start
   socket.on("start-quiz", () => {
     const participant = participants.get(socket.id);
     if (participant) {
       participant.status = "in-progress";
+      participant.currentQuestion = 0;
       participants.set(socket.id, participant);
 
       // Update quiz state
@@ -79,6 +82,39 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Handle question progress update
+  socket.on("question-progress", ({ questionIndex, score }) => {
+    const participant = participants.get(socket.id);
+    if (participant) {
+      participant.currentQuestion = questionIndex;
+      participants.set(socket.id, participant);
+
+      // Create or update interim results
+      if (!results.has(socket.id)) {
+        results.set(socket.id, {
+          name: participant.name,
+          walletAddress: participant.walletAddress,
+          score: score || 0,
+          answers: [],
+          completedQuestions: questionIndex + 1,
+        });
+      } else {
+        const result = results.get(socket.id);
+        result.score = score;
+        result.completedQuestions = questionIndex + 1;
+        results.set(socket.id, result);
+      }
+
+      // Broadcast updated participants and live leaderboard
+      io.emit("participants-updated", Array.from(participants.values()));
+
+      // Send a live leaderboard update
+      const currentResults = Array.from(results.values()).sort(
+        (a, b) => b.score - a.score
+      );
+      io.emit("live-leaderboard-update", currentResults);
+    }
+  });
   // Handle quiz completion
   socket.on("quiz-completed", (result) => {
     const participant = participants.get(socket.id);
@@ -95,6 +131,12 @@ io.on("connection", (socket) => {
 
       // Update quiz state
       quizState.finishedParticipants++;
+
+      // Broadcast live leaderboard update with current results
+      const currentResults = Array.from(results.values()).sort(
+        (a, b) => b.score - a.score
+      );
+      io.emit("live-leaderboard-update", currentResults);
 
       // Check if all participants have finished
       if (quizState.finishedParticipants === quizState.totalParticipants) {
